@@ -49,4 +49,9 @@ class TestBrainFuckRunner(unittest.TestCase):
         self.assertEqual(memory_space[3], 0)
         self.assertEqual(memory_space[4], 0)
 
+    def test_skipped_loop(self):
+        memory_space = []
+        run("[+++[]++++]>+", memory=memory_space)
+        self.assertEquals(memory_space[0], 0)
+        self.assertEquals(memory_space[1], 1)
 
