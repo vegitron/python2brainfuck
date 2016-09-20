@@ -8,6 +8,6 @@ before_script:
   - pip install pep8
 script:
   - pep8 p2bf/
-  - coverage run --source=./ python test.py
+  - coverage run --source=./ test.py
 after_script:
   - coveralls
