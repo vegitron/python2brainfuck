@@ -1,0 +1,14 @@
+sudo: false
+language: python
+python:
+  - "2.7"
+install: pip install -r requirements.txt
+before_script:
+  - pip install coverage
+  - pip install python-coveralls
+  - pip install pep8
+script:
+  - pep8 p2bf/
+#  - coverage run --source=myuw/ --omit=myuw/migrations/* manage.py test myuw
+#after_script:
+#  - coveralls

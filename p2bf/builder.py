@@ -2,6 +2,7 @@ import re
 from p2bf.emitter import Emitter
 from p2bf.variable_map import VariableMap
 
+
 class BFBuild(object):
     byte_var_table = {}
     current_var_index = 0
@@ -37,7 +38,9 @@ class BFBuild(object):
             return
 
         self.emit.debug("Unparsed line: %s" % line)
-        raise Exception("I only know a little bit of python: print '<string literal>', <variable_name> = '<one char>', print <variable_name>.  Sorry!")
+        raise Exception("I only know a little bit of python: print '<string "
+                        "literal>', <variable_name> = '<one char>', print "
+                        "<variable_name>.  Sorry!")
 
     def process_print_variable(self, line):
         matches = re.match("print (.*)", line)
@@ -69,7 +72,8 @@ class BFBuild(object):
         # While there's a value at the source, subtract one, and add one to
         # the scratch space and target
         self.emit_move_to_var_index(source_index)
-        self.emit.start_loop("Start copying the value into the scratch and destination")
+        self.emit.start_loop("Start copying the value into the "
+                             "scratch and destination")
 
         self.emit.subtract()
         self.emit_move_to_var_index(0)
@@ -102,13 +106,11 @@ class BFBuild(object):
         self.emit_zero_current_index()
         self.emit_set_current_index_value(ord(variable_value))
 
-
     def process_print_static_string(self, line):
         matches = re.match("print '(.*)'", line)
         value = matches.group(1)
         self.emit_print_string(value)
         self.emit_print_string("\n")
-
 
     def emit_print_string(self, value):
         self.emit_move_to_var_index(0)
@@ -131,10 +133,12 @@ class BFBuild(object):
 
     def emit_move_to_var_index(self, index):
         if index > self.current_var_index:
-            self.emit.move_index_right_by(index - self.current_var_index, "Move to variable index %s" % index)
+            self.emit.move_index_right_by(index - self.current_var_index,
+                                          "Move to variable index %s" % index)
 
         elif index < self.current_var_index:
-            self.emit.move_index_left_by(self.current_var_index - index, "Move to variable index %s" % index)
+            self.emit.move_index_left_by(self.current_var_index - index,
+                                         "Move to variable index %s" % index)
         else:
             self.emit.debug("noop: Already at variable index %s" % index)
         self.current_var_index = index
@@ -142,5 +146,3 @@ class BFBuild(object):
     def emit_bf(self):
         for line in self.python.split("\n"):
             self.process_line(line)
-
-

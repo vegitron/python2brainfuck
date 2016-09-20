@@ -1,5 +1,6 @@
 import sys
 
+
 class Emitter(object):
     verbose = False
 
@@ -47,4 +48,3 @@ class Emitter(object):
     def end_loop(self, message=None):
         sys.stdout.write("]")
         self.debug(message)
-

@@ -15,4 +15,3 @@ class VariableMap(object):
         if name not in self.byte_var_table:
             raise Exception("Undefined variable: %s" % name)
         return self.byte_var_table[name]
-
