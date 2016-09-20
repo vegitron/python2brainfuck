@@ -4,8 +4,8 @@ import tty
 import termios
 
 
-def run(program):
-    data = [0]
+def run(program, memory=[]):
+    memory.append(0)
     loop_stack = []
     index = 0
     max_seen_index = 0
@@ -18,7 +18,7 @@ def run(program):
         if character == ">":
             index += 1
             if index > max_seen_index:
-                data.append(0)
+                memory.append(0)
                 max_seen_index = index
 
         elif character == "<":
@@ -27,11 +27,11 @@ def run(program):
                 raise Exception("Negative pointer index at char %s" % pindex)
             pass
         elif character == "+":
-            data[index] += 1
+            memory[index] += 1
         elif character == "-":
-            data[index] -= 1
+            memory[index] -= 1
         elif character == ".":
-            sys.stdout.write(chr(data[index]))
+            sys.stdout.write(chr(memory[index]))
             sys.stdout.flush()
         elif character == ",":
             try:
@@ -39,11 +39,11 @@ def run(program):
                 old_settings = termios.tcgetattr(fd)
                 tty.setraw(sys.stdin.fileno())
                 val = sys.stdin.read(1)
-                data[index] = ord(val)
+                memory[index] = ord(val)
             finally:
                 termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
         elif character == "[":
-            if data[index] == 0:
+            if memory[index] == 0:
                 inner_bracket_depth = 0
                 more = True
                 while more:
@@ -67,7 +67,7 @@ def run(program):
                 raise Exception("Extra loop ending at char %s" % pindex)
 
             current_loop = loop_stack[len(loop_stack)-1]
-            if data[index] != 0:
+            if memory[index] != 0:
                 pindex = current_loop[0]
             else:
                 loop_stack.pop()
@@ -80,19 +80,20 @@ def run(program):
     if len(loop_stack):
         raise Exception("Unfinished loop at end of program")
 
-if len(sys.argv) < 2:
-    print "Usage: bf.py <script name>"
-    sys.exit(1)
+if __name__ == '__main__':
+    if len(sys.argv) < 2:
+        print "Usage: bf.py <script name>"
+        sys.exit(1)
 
-bf = open(sys.argv[1])
+    bf = open(sys.argv[1])
 
-program = ""
-buff = bf.read(1024)
-pparts = []
-while (buff):
-    pparts.append(buff)
+    program = ""
     buff = bf.read(1024)
+    pparts = []
+    while (buff):
+        pparts.append(buff)
+        buff = bf.read(1024)
 
-program = "".join(pparts)
+    program = "".join(pparts)
 
-run(program)
+    run(program)
