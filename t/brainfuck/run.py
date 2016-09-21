@@ -1,5 +1,7 @@
 import unittest
 from util.run_bf import run
+import StringIO
+
 
 class TestBrainFuckRunner(unittest.TestCase):
     def test_memory(self):
@@ -55,3 +57,24 @@ class TestBrainFuckRunner(unittest.TestCase):
         self.assertEquals(memory_space[0], 0)
         self.assertEquals(memory_space[1], 1)
 
+    def test_print(self):
+        # Hello world from https://en.wikipedia.org/wiki/Brainfuck
+        output = StringIO.StringIO()
+        run("++++++++++[>+++++++>++++++++++>+++>+<<<<-]>++.>+.+++++++..+++.>"
+            "++.<<+++++++++++++++.>.+++.------.--------.>+.>.", stdout=output)
+        self.assertEquals(output.getvalue(), "Hello World!\n")
+
+    def test_read_input(self):
+        class Input(object):
+            index = -1
+            def get_input(self):
+                self.index += 1
+                return "Hello"[self.index]
+
+        memory_space = []
+        run(",>,>,>,>,", input_reader=Input(), memory=memory_space)
+        self.assertEqual(chr(memory_space[0]), "H")
+        self.assertEqual(chr(memory_space[1]), "e")
+        self.assertEqual(chr(memory_space[2]), "l")
+        self.assertEqual(chr(memory_space[3]), "l")
+        self.assertEqual(chr(memory_space[4]), "o")

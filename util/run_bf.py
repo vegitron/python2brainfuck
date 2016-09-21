@@ -3,8 +3,18 @@ import sys
 import tty
 import termios
 
+class Reader(object):
+    def get_input(self):
+        try:
+            fd = sys.stdin.fileno()
+            old_settings = termios.tcgetattr(fd)
+            tty.setraw(sys.stdin.fileno())
+            val = sys.stdin.read(1)
+            return val
+        finally:
+            termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
 
-def run(program, memory=[]):
+def run(program, memory=[], stdout=sys.stdout, input_reader=Reader()):
     memory.append(0)
     loop_stack = []
     index = 0
@@ -31,17 +41,11 @@ def run(program, memory=[]):
         elif character == "-":
             memory[index] -= 1
         elif character == ".":
-            sys.stdout.write(chr(memory[index]))
-            sys.stdout.flush()
+            stdout.write(chr(memory[index]))
+            stdout.flush()
         elif character == ",":
-            try:
-                fd = sys.stdin.fileno()
-                old_settings = termios.tcgetattr(fd)
-                tty.setraw(sys.stdin.fileno())
-                val = sys.stdin.read(1)
-                memory[index] = ord(val)
-            finally:
-                termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+            val = input_reader.get_input()
+            memory[index] = ord(val)
         elif character == "[":
             if memory[index] == 0:
                 inner_bracket_depth = 0
