@@ -1,4 +1,5 @@
 import re
+import ast
 from p2bf.emitter import Emitter
 from p2bf.variable_map import VariableMap
 
@@ -8,58 +9,63 @@ class BFBuild(object):
     current_var_index = 0
     python = ""
 
-    def __init__(self, python, verbose=False):
+    def __init__(self, python, verbose=False, emit=None):
         self.python = python
         self.vmap = VariableMap()
-        self.emit = Emitter(verbose=verbose)
+        if emit:
+            self.emit = emit
+        else:
+            self.emit = Emitter(verbose=verbose)
 
-    def process_line(self, line):
-        if not re.match("[^ ]", line):
-            return
-        matches = re.match("print '(.*)'", line)
+    def error_on_node(self, node, error):
+        raise Exception("Error on line %s: %s" % (node.lineno, error))
 
-        if matches:
-            self.process_print_static_string(line)
-            return
+    def process_print_node(self, print_node):
+        if print_node.dest:
+            self.error_on_node(node, "Don't know how to do print destinations")
 
-        matches = re.match("print (.+)", line)
-        if matches:
-            self.process_print_variable(line)
-            return
+        values = print_node.values
+        for value in values:
+            if isinstance(value, ast.Str):
+                self.emit_print_string(value.s)
+            elif isinstance(value, ast.Name):
+                if not isinstance(value.ctx, ast.Load):
+                    self.error_on_node(node, "Don't know what this variable"
+                                             "context is")
 
-        matches = re.match("([^ ]+)[ ]*=[ ]*'(.)'", line)
-        if matches:
-            self.process_set_char_variable(line)
-            return
+                self.emit_print_variable(value.id)
+        if print_node.nl:
+            self.emit_print_string("\n")
 
-        matches = re.match("([^ ]+)[ ]*=[ ]*([^ ]+)", line)
-        if matches:
-            self.process_set_variable_to_variable(line)
-            return
+    def process_string_assignment(self, target, value, value_node):
+        if len(value) > 1:
+            self.error_on_node(value_node,
+                               "Can only set single chars right now")
 
-        self.emit.debug("Unparsed line: %s" % line)
-        raise Exception("I only know a little bit of python: print '<string "
-                        "literal>', <variable_name> = '<one char>', print "
-                        "<variable_name>.  Sorry!")
-
-    def process_print_variable(self, line):
-        matches = re.match("print (.*)", line)
-
-        variable_name = matches.group(1)
-
-        v_index = self.vmap.get_variable_index(variable_name)
+        v_index = self.vmap.get_or_create_variable_index(target)
 
         self.emit_move_to_var_index(v_index)
-        self.emit.print_current_index()
-        self.emit_print_string("\n")
+        self.emit_zero_current_index()
+        self.emit_set_current_index_value(ord(value))
 
-    def process_set_variable_to_variable(self, line):
-        matches = re.match("([^ ]+)[ ]*=[ ]*([^ ]+)", line)
-        var_target = matches.group(1)
-        var_source = matches.group(2)
+    def process_assignment_node(self, assignment_node):
+        targets = assignment_node.targets
+        value = assignment_node.value
 
-        source_index = self.vmap.get_variable_index(var_source)
-        target_index = self.vmap.get_or_create_variable_index(var_target)
+        for target in targets:
+            if not isinstance(target, ast.Name):
+                self.error_on_node(target, "Unknown syntax :(")
+
+            if isinstance(value, ast.Str):
+                self.process_string_assignment(target.id, value.s, value)
+            elif isinstance(value, ast.Name):
+                self.process_variable_to_variable(target.id, value.id, value)
+            else:
+                self.error_on_node(value, "Unable to set value type")
+
+    def process_variable_to_variable(self, target, source, source_node):
+        source_index = self.vmap.get_variable_index(source)
+        target_index = self.vmap.get_or_create_variable_index(target)
 
         # Clear out our scratch space.
         self.emit_move_to_var_index(0)
@@ -93,24 +99,10 @@ class BFBuild(object):
         self.emit_move_to_var_index(0)
         self.emit.end_loop()
 
-    def process_set_char_variable(self, line):
-        matches = re.match("([^ ]+)[ ]*=[ ]*'(.)", line)
-        value = matches.group(1)
-
-        variable_name = matches.group(1)
-        variable_value = matches.group(2)
-
-        v_index = self.vmap.get_or_create_variable_index(variable_name)
-
+    def emit_print_variable(self, variable_name):
+        v_index = self.vmap.get_variable_index(variable_name)
         self.emit_move_to_var_index(v_index)
-        self.emit_zero_current_index()
-        self.emit_set_current_index_value(ord(variable_value))
-
-    def process_print_static_string(self, line):
-        matches = re.match("print '(.*)'", line)
-        value = matches.group(1)
-        self.emit_print_string(value)
-        self.emit_print_string("\n")
+        self.emit.print_current_index()
 
     def emit_print_string(self, value):
         self.emit_move_to_var_index(0)
@@ -144,5 +136,11 @@ class BFBuild(object):
         self.current_var_index = index
 
     def emit_bf(self):
-        for line in self.python.split("\n"):
-            self.process_line(line)
+        top_node = ast.parse(self.python)
+        for node in ast.iter_child_nodes(top_node):
+            if isinstance(node, ast.Assign):
+                self.process_assignment_node(node)
+            elif isinstance(node, ast.Print):
+                self.process_print_node(node)
+            else:
+                self.error_on_node(node, "Syntax not supported yet :(")
