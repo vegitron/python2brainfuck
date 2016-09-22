@@ -66,11 +66,11 @@ class BFBuild(object):
         if_index = self.vmap.get_variable_index(current_if_var)
         else_index = self.vmap.get_variable_index(current_else_var)
 
+        self.emit.debug("At if depth %s" % (self.if_depth-1))
         self.emit_move_to_var_index(if_index)
         self.emit_zero_current_index()
         self.emit_move_to_var_index(else_index)
         self.emit_zero_current_index()
-        self.emit.debug("Add one here?")
         self.emit.add("Set the else to true by default")
 
         if isinstance(test, ast.Name):
@@ -94,6 +94,22 @@ class BFBuild(object):
 
         self.emit_move_to_var_index(if_index)
         self.emit.end_loop()
+
+        self.emit_move_to_var_index(else_index)
+        self.emit.start_loop("Else")
+        self.emit_zero_current_index()
+        orelse_len = len(node.orelse)
+        if orelse_len:
+            else_node = node.orelse[0]
+            if orelse_len == 1 and isinstance(else_node, ast.If):
+                self.process_if_node(else_node)
+            else:
+                for else_node in node.orelse:
+                    self.process_node(else_node)
+        self.emit_move_to_var_index(else_index)
+        self.emit.end_loop()
+        self.if_depth -= 1
+
 
     def process_assignment_node(self, assignment_node):
         targets = assignment_node.targets
