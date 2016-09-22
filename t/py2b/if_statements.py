@@ -4,31 +4,40 @@ from p2bf.emitter import Emitter
 import StringIO
 from util.run_bf import run
 
-class TestVariableAssignment(unittest.TestCase):
-    def test_single_assignment(self):
+class TestIfStatements(unittest.TestCase):
+    def test_if_true(self):
         emit_output = StringIO.StringIO()
         run_output = StringIO.StringIO()
         emitter = Emitter(stdout=emit_output)
-        python = """v1 = "a" """
+        python = """if True:\n    print "OK" """
         builder = BFBuild(python, emit=emitter).emit_bf()
-
         run(emit_output.getvalue(), stdout=run_output)
+        self.assertEqual(run_output.getvalue(), "OK\n")
 
-    def test_multi_assignment(self):
+    def test_if_false(self):
         emit_output = StringIO.StringIO()
         run_output = StringIO.StringIO()
         emitter = Emitter(stdout=emit_output)
-        python = """v3 = v2 = v1 = "a" """
+        python = """if False:\n    print "BAD" """
         builder = BFBuild(python, emit=emitter).emit_bf()
-
         run(emit_output.getvalue(), stdout=run_output)
+        self.assertEqual(run_output.getvalue(), "")
 
-    def test_variable_to_variable(self):
+    def test_other_var_true(self):
         emit_output = StringIO.StringIO()
         run_output = StringIO.StringIO()
         emitter = Emitter(stdout=emit_output)
-        python = """v1 = "a"\nv2 = v1 """
+        python = """foo = 'A'\nif foo:\n    print "OK" """
         builder = BFBuild(python, emit=emitter).emit_bf()
-
         run(emit_output.getvalue(), stdout=run_output)
+        self.assertEqual(run_output.getvalue(), "OK\n")
+
+    def test_plain_string_true(self):
+        emit_output = StringIO.StringIO()
+        run_output = StringIO.StringIO()
+        emitter = Emitter(stdout=emit_output)
+        python = """if 'A':\n    print "OK" """
+        builder = BFBuild(python, emit=emitter).emit_bf()
+        run(emit_output.getvalue(), stdout=run_output)
+        self.assertEqual(run_output.getvalue(), "OK\n")
 

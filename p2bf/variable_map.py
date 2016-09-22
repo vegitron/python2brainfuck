@@ -7,7 +7,7 @@ class VariableMap(object):
     def get_or_create_variable_index(self, name):
         if not self.variable_exists(name):
             # Intentionally leaving cell 0 empty
-            self.byte_var_table[name] = len(self.byte_var_table)+1
+            self.byte_var_table[name] = len(self.byte_var_table)
 
         return self.byte_var_table[name]
 

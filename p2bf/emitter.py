@@ -36,7 +36,7 @@ class Emitter(object):
 
     def debug(self, message=None):
         if message and self.verbose:
-            print(" %s" % message)
+            self.stdout.write(" %s\n" % message)
 
     def print_current_index(self, message=None):
         self.stdout.write(".")

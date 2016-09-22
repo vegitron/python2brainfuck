@@ -2,12 +2,14 @@ import re
 import ast
 from p2bf.emitter import Emitter
 from p2bf.variable_map import VariableMap
+import p2bf.constants as constants
 
 
 class BFBuild(object):
     byte_var_table = {}
     current_var_index = 0
     python = ""
+    if_depth = 0
 
     def __init__(self, python, verbose=False, emit=None):
         self.python = python
@@ -48,6 +50,51 @@ class BFBuild(object):
         self.emit_zero_current_index()
         self.emit_set_current_index_value(ord(value))
 
+    def current_if_var(self):
+        return "___if_%s" % self.if_depth
+
+    def current_else_var(self):
+        return "___else_%s" % self.if_depth
+
+    def process_if_node(self, node):
+        test = node.test
+
+        current_if_var = self.current_if_var()
+        current_else_var = self.current_else_var()
+
+        self.if_depth += 1
+        if_index = self.vmap.get_variable_index(current_if_var)
+        else_index = self.vmap.get_variable_index(current_else_var)
+
+        self.emit_move_to_var_index(if_index)
+        self.emit_zero_current_index()
+        self.emit_move_to_var_index(else_index)
+        self.emit_zero_current_index()
+        self.emit.debug("Add one here?")
+        self.emit.add("Set the else to true by default")
+
+        if isinstance(test, ast.Name):
+            self.process_variable_to_variable(current_if_var, test.id, test)
+        elif isinstance(test, ast.Str):
+            self.process_string_assignment(current_if_var, test.s, test)
+        else:
+            print test
+            self.error_on_node(test, "Don't know how to do this test yet")
+
+        self.emit_move_to_var_index(if_index)
+        self.emit.start_loop("If the value at index %s is true:" % if_index)
+        # If true value, zero out the if index to make sure we don't keep
+        # looping, and zero out the else index so the else doesn't run.
+        self.emit_zero_current_index()
+        self.emit_move_to_var_index(else_index)
+        self.emit_zero_current_index()
+
+        for if_body_node in node.body:
+            self.process_node(if_body_node)
+
+        self.emit_move_to_var_index(if_index)
+        self.emit.end_loop()
+
     def process_assignment_node(self, assignment_node):
         targets = assignment_node.targets
         value = assignment_node.value
@@ -67,8 +114,10 @@ class BFBuild(object):
         source_index = self.vmap.get_variable_index(source)
         target_index = self.vmap.get_or_create_variable_index(target)
 
+        self.emit.debug("Copying value from %s to %s" % (source_index,
+                                                         target_index))
         # Clear out our scratch space.
-        self.emit_move_to_var_index(0)
+        self.emit_move_to_var_index(self.get_scratch_index())
         self.emit_zero_current_index()
 
         # Clear out the destination space
@@ -79,10 +128,10 @@ class BFBuild(object):
         # the scratch space and target
         self.emit_move_to_var_index(source_index)
         self.emit.start_loop("Start copying the value into the "
-                             "scratch and destination")
+                             "scratch %s and destination %s")
 
         self.emit.subtract()
-        self.emit_move_to_var_index(0)
+        self.emit_move_to_var_index(self.get_scratch_index())
         self.emit.add()
         self.emit_move_to_var_index(target_index)
         self.emit.add()
@@ -91,12 +140,12 @@ class BFBuild(object):
 
         # While there's a value in the scratch space, subtract one, and add
         # one at the source to restore its value
-        self.emit_move_to_var_index(0)
+        self.emit_move_to_var_index(self.get_scratch_index())
         self.emit.start_loop("Restore the value to the source index")
         self.emit.subtract()
         self.emit_move_to_var_index(source_index)
         self.emit.add()
-        self.emit_move_to_var_index(0)
+        self.emit_move_to_var_index(self.get_scratch_index())
         self.emit.end_loop()
 
     def emit_print_variable(self, variable_name):
@@ -105,7 +154,7 @@ class BFBuild(object):
         self.emit.print_current_index()
 
     def emit_print_string(self, value):
-        self.emit_move_to_var_index(0)
+        self.emit_move_to_var_index(self.get_scratch_index())
 
         for char in value:
             next_ord = ord(char)
@@ -135,12 +184,41 @@ class BFBuild(object):
             self.emit.debug("noop: Already at variable index %s" % index)
         self.current_var_index = index
 
+    def process_node(self, node):
+        if isinstance(node, ast.Assign):
+            self.process_assignment_node(node)
+        elif isinstance(node, ast.Print):
+            self.process_print_node(node)
+        elif isinstance(node, ast.If):
+            self.process_if_node(node)
+        elif isinstance(node, ast.Pass):
+            pass
+        else:
+            print ast.dump(node)
+            self.error_on_node(node, "Syntax not supported yet :(")
+
+    def get_scratch_index(self):
+        return self.vmap.get_variable_index("___scratch")
+
+    def create_starting_variables(self):
+        vmap = self.vmap
+        scratch_space_index = vmap.get_or_create_variable_index("___scratch")
+        true_index = vmap.get_or_create_variable_index("True")
+        false_index = vmap.get_or_create_variable_index("False")
+        self.emit.debug("Defining True at index %s" % true_index)
+        self.emit_move_to_var_index(true_index)
+        self.emit_zero_current_index()
+        self.emit.add()
+        self.emit.debug("Defining False at index %s" % false_index)
+        self.emit_move_to_var_index(false_index)
+        self.emit_zero_current_index()
+
+        for i in range(constants.IF_STATEMENT_DEPTH):
+            vmap.get_or_create_variable_index("___if_%s" % i)
+            vmap.get_or_create_variable_index("___else_%s" % i)
+
     def emit_bf(self):
+        self.create_starting_variables()
         top_node = ast.parse(self.python)
         for node in ast.iter_child_nodes(top_node):
-            if isinstance(node, ast.Assign):
-                self.process_assignment_node(node)
-            elif isinstance(node, ast.Print):
-                self.process_print_node(node)
-            else:
-                self.error_on_node(node, "Syntax not supported yet :(")
+            self.process_node(node)
