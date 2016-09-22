@@ -110,7 +110,6 @@ class BFBuild(object):
         self.emit.end_loop()
         self.if_depth -= 1
 
-
     def process_assignment_node(self, assignment_node):
         targets = assignment_node.targets
         value = assignment_node.value
