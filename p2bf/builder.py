@@ -6,6 +6,8 @@ import p2bf.constants as constants
 
 
 class BFBuild(object):
+    temp_vars = {}
+    free_temp_vars = []
     byte_var_table = {}
     current_var_index = 0
     python = ""
@@ -110,6 +112,79 @@ class BFBuild(object):
         self.emit.end_loop()
         self.if_depth -= 1
 
+    def get_temp_target_var(self):
+        if len(self.free_temp_vars):
+            return self.free_temp_vars.pop()
+        current_count = len(self.temp_vars)
+        var_id = '___tmp_var_%s' % current_count
+        self.temp_vars[var_id] = True
+        self.vmap.get_or_create_variable_index(var_id)
+        return var_id
+
+    def free_temp_target_var(self, variable):
+        self.free_temp_vars.append(variable)
+
+    def process_compare(self, target, node):
+
+        if len(node.ops) > 1:
+            self.error_on_node(node,
+                               "Don't know how to do multiple comparisons")
+        if isinstance(node.ops[0], ast.Eq):
+            left_var = self.get_temp_target_var()
+            comp_var = self.get_temp_target_var()
+            self._process_assignment_to_variable(left_var, node.left)
+            self._process_assignment_to_variable(comp_var, node.comparators[0])
+
+            target_index = self.vmap.get_variable_index(target)
+            left_index = self.vmap.get_variable_index(left_var)
+            comp_index = self.vmap.get_variable_index(comp_var)
+            # If we subtract one from each temp var until the first one is
+            # empty, if the second temp var is empty then they're equal.
+
+            # We set the target to true initially, so it can fail in a loop on
+            # the second variable
+            self.emit_move_to_var_index(target_index)
+            self.emit_zero_current_index()
+            self.emit.add()
+
+            self.emit_move_to_var_index(left_index)
+            self.emit.start_loop("Emptying tmp left and comp variables")
+            self.emit.subtract()
+            self.emit_move_to_var_index(comp_index)
+            self.emit.subtract()
+            self.emit_move_to_var_index(left_index)
+            self.emit.end_loop()
+
+            self.emit_move_to_var_index(comp_index)
+            self.emit.start_loop("If there's a value here, the values aren't "
+                                 "equal!")
+            self.emit_zero_current_index()
+            self.emit_move_to_var_index(target_index)
+            self.emit_zero_current_index()
+            self.emit_move_to_var_index(comp_index)
+            self.emit.end_loop()
+            self.free_temp_target_var(left_var)
+            self.free_temp_target_var(comp_var)
+        else:
+            self.error_on_node(node, "Unknown comparison: %s" % node.ops[0])
+
+    def _process_assignment_to_variable(self, target, node):
+            if isinstance(node, ast.Str):
+                self.process_string_assignment(target, node.s, node)
+            elif isinstance(node, ast.Name):
+                self.process_variable_to_variable(target, node.id, node)
+            elif isinstance(node, ast.Compare):
+                compare_target = self.get_temp_target_var()
+                self.process_compare(compare_target, node)
+                self.process_variable_to_variable(target,
+                                                  compare_target,
+                                                  node)
+                self.free_temp_target_var(compare_target)
+
+            else:
+                print ast.dump(assignment_node)
+                self.error_on_node(node, "Unable to set value type")
+
     def process_assignment_node(self, assignment_node):
         targets = assignment_node.targets
         value = assignment_node.value
@@ -118,13 +193,7 @@ class BFBuild(object):
             if not isinstance(target, ast.Name):
                 self.error_on_node(target, "Unknown syntax :(")
 
-            if isinstance(value, ast.Str):
-                self.process_string_assignment(target.id, value.s, value)
-            elif isinstance(value, ast.Name):
-                self.process_variable_to_variable(target.id, value.id, value)
-            else:
-                print ast.dump(assignment_node)
-                self.error_on_node(value, "Unable to set value type")
+            self._process_assignment_to_variable(target.id, value)
 
     def process_variable_to_variable(self, target, source, source_node):
         source_index = self.vmap.get_variable_index(source)
