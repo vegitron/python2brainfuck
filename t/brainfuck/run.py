@@ -78,3 +78,22 @@ class TestBrainFuckRunner(unittest.TestCase):
         self.assertEqual(chr(memory_space[2]), "l")
         self.assertEqual(chr(memory_space[3]), "l")
         self.assertEqual(chr(memory_space[4]), "o")
+
+
+    def test_overflow(self):
+        memory_space = []
+        run("+"*127, memory=memory_space)
+        self.assertEquals(memory_space[0], 127)
+
+        memory_space = []
+        run("+"*128, memory=memory_space)
+        self.assertEquals(memory_space[0], -1)
+
+    def test_underflow(self):
+        memory_space = []
+        run("-"*127, memory=memory_space)
+        self.assertEquals(memory_space[0], -127)
+
+        memory_space = []
+        run("-"*128, memory=memory_space)
+        self.assertEquals(memory_space[0], 127)

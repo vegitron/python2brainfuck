@@ -10,5 +10,6 @@ from brainfuck.run import TestBrainFuckRunner
 from py2b.print_statement import TestPyPrint
 from py2b.variable_assignment import TestVariableAssignment
 from py2b.if_statements import TestIfStatements
+from py2b.operators import TestOperators
 
 unittest.main()

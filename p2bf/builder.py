@@ -123,6 +123,7 @@ class BFBuild(object):
             elif isinstance(value, ast.Name):
                 self.process_variable_to_variable(target.id, value.id, value)
             else:
+                print ast.dump(assignment_node)
                 self.error_on_node(value, "Unable to set value type")
 
     def process_variable_to_variable(self, target, source, source_node):

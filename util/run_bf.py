@@ -38,8 +38,12 @@ def run(program, memory=[], stdout=sys.stdout, input_reader=Reader()):
             pass
         elif character == "+":
             memory[index] += 1
+            if memory[index] == 128:
+                memory[index] = -1
         elif character == "-":
             memory[index] -= 1
+            if memory[index] == -128:
+                memory[index] = 127
         elif character == ".":
             stdout.write(chr(memory[index]))
             stdout.flush()
