@@ -153,6 +153,42 @@ class BFBuild(object):
             self.emit.end_loop()
             self.free_temp_target_var(left_var)
             self.free_temp_target_var(comp_var)
+        elif isinstance(node.ops[0], ast.NotEq):
+            left_var = self.get_temp_target_var()
+            comp_var = self.get_temp_target_var()
+            self._process_assignment_to_variable(left_var, node.left)
+            self._process_assignment_to_variable(comp_var, node.comparators[0])
+
+            target_index = self.vmap.get_variable_index(target)
+            left_index = self.vmap.get_variable_index(left_var)
+            comp_index = self.vmap.get_variable_index(comp_var)
+            # If we subtract one from each temp var until the first one is
+            # empty, if the second temp var is empty then they're equal.
+
+            # We set the target to false initially, so it can be true in a
+            # loop on the second variable
+            self.emit_move_to_var_index(target_index)
+            self.emit_zero_current_index()
+
+            self.emit_move_to_var_index(left_index)
+            self.emit.start_loop("Emptying tmp left and comp variables")
+            self.emit.subtract()
+            self.emit_move_to_var_index(comp_index)
+            self.emit.subtract()
+            self.emit_move_to_var_index(left_index)
+            self.emit.end_loop()
+
+            self.emit_move_to_var_index(comp_index)
+            self.emit.start_loop("If there's a value here, the values aren't "
+                                 "equal!")
+            self.emit_zero_current_index()
+            self.emit_move_to_var_index(target_index)
+            self.emit.add()
+            self.emit_move_to_var_index(comp_index)
+            self.emit.end_loop()
+            self.free_temp_target_var(left_var)
+            self.free_temp_target_var(comp_var)
+
         else:
             self.error_on_node(node, "Unknown comparison: %s" % node.ops[0])
 

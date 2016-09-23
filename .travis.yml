@@ -7,7 +7,7 @@ before_script:
   - pip install python-coveralls
   - pip install pep8
 script:
-  - pep8 p2bf/
+  - pep8 p2bf/ t/
   - coverage run --source=./ test.py
 after_script:
   - coveralls

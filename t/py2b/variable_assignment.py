@@ -4,6 +4,7 @@ from p2bf.emitter import Emitter
 import StringIO
 from util.run_bf import run
 
+
 class TestVariableAssignment(unittest.TestCase):
     def test_single_assignment(self):
         emit_output = StringIO.StringIO()
@@ -31,4 +32,3 @@ class TestVariableAssignment(unittest.TestCase):
         builder = BFBuild(python, emit=emitter).emit_bf()
 
         run(emit_output.getvalue(), stdout=run_output)
-

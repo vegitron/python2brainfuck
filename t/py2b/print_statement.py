@@ -4,6 +4,7 @@ from p2bf.emitter import Emitter
 import StringIO
 from util.run_bf import run
 
+
 class TestPyPrint(unittest.TestCase):
 
     def test_single_static_output(self):
@@ -27,4 +28,3 @@ class TestPyPrint(unittest.TestCase):
         run(emit_output.getvalue(), stdout=run_output)
 
         self.assertEqual(run_output.getvalue(), "Hello World\n")
-

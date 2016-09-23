@@ -4,6 +4,7 @@ from p2bf.emitter import Emitter
 import StringIO
 from util.run_bf import run
 
+
 class TestIfStatements(unittest.TestCase):
     def test_if_true(self):
         emit_output = StringIO.StringIO()
@@ -93,4 +94,3 @@ class TestIfStatements(unittest.TestCase):
         builder = BFBuild(python, emit=emitter).emit_bf()
         run(emit_output.getvalue(), stdout=run_output)
         self.assertEqual(run_output.getvalue(), "ELSE\n")
-

@@ -67,6 +67,7 @@ class TestBrainFuckRunner(unittest.TestCase):
     def test_read_input(self):
         class Input(object):
             index = -1
+
             def get_input(self):
                 self.index += 1
                 return "Hello"[self.index]
@@ -78,7 +79,6 @@ class TestBrainFuckRunner(unittest.TestCase):
         self.assertEqual(chr(memory_space[2]), "l")
         self.assertEqual(chr(memory_space[3]), "l")
         self.assertEqual(chr(memory_space[4]), "o")
-
 
     def test_overflow(self):
         memory_space = []
