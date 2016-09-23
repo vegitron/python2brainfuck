@@ -2,7 +2,6 @@ import re
 import ast
 from p2bf.emitter import Emitter
 from p2bf.variable_map import VariableMap
-import p2bf.constants as constants
 
 
 class BFBuild(object):
@@ -52,17 +51,11 @@ class BFBuild(object):
         self.emit_zero_current_index()
         self.emit_set_current_index_value(ord(value))
 
-    def current_if_var(self):
-        return "___if_%s" % self.if_depth
-
-    def current_else_var(self):
-        return "___else_%s" % self.if_depth
-
     def process_if_node(self, node):
         test = node.test
 
-        current_if_var = self.current_if_var()
-        current_else_var = self.current_else_var()
+        current_if_var = self.get_temp_target_var()
+        current_else_var = self.get_temp_target_var()
 
         self.if_depth += 1
         if_index = self.vmap.get_variable_index(current_if_var)
@@ -104,7 +97,8 @@ class BFBuild(object):
                     self.process_node(else_node)
         self.emit_move_to_var_index(else_index)
         self.emit.end_loop()
-        self.if_depth -= 1
+        self.free_temp_target_var(current_if_var)
+        self.free_temp_target_var(current_else_var)
 
     def get_temp_target_var(self):
         if len(self.free_temp_vars):
@@ -291,10 +285,6 @@ class BFBuild(object):
         self.emit.debug("Defining False at index %s" % false_index)
         self.emit_move_to_var_index(false_index)
         self.emit_zero_current_index()
-
-        for i in range(constants.IF_STATEMENT_DEPTH):
-            vmap.get_or_create_variable_index("___if_%s" % i)
-            vmap.get_or_create_variable_index("___else_%s" % i)
 
     def emit_bf(self):
         self.create_starting_variables()
