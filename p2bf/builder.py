@@ -75,13 +75,7 @@ class BFBuild(object):
         self.emit_zero_current_index()
         self.emit.add("Set the else to true by default")
 
-        if isinstance(test, ast.Name):
-            self.process_variable_to_variable(current_if_var, test.id, test)
-        elif isinstance(test, ast.Str):
-            self.process_string_assignment(current_if_var, test.s, test)
-        else:
-            print test
-            self.error_on_node(test, "Don't know how to do this test yet")
+        self._process_assignment_to_variable(current_if_var, test)
 
         self.emit_move_to_var_index(if_index)
         self.emit.start_loop("If the value at index %s is true:" % if_index)

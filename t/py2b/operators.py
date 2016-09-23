@@ -44,12 +44,19 @@ class TestOperators(unittest.TestCase):
         self.assertEquals(0, ord(run_output.getvalue()[0]))
 
 
-
     def test_equality_in_if(self):
-        return
         emit_output = StringIO.StringIO()
         run_output = StringIO.StringIO()
         emitter = Emitter(stdout=emit_output)
         python = """if True == True:\n    print "OK" """
         builder = BFBuild(python, emit=emitter).emit_bf()
         run(emit_output.getvalue(), stdout=run_output)
+        self.assertEquals("OK\n", run_output.getvalue())
+
+        emit_output = StringIO.StringIO()
+        run_output = StringIO.StringIO()
+        emitter = Emitter(stdout=emit_output)
+        python = """if False == True:\n    print "OK" """
+        builder = BFBuild(python, emit=emitter).emit_bf()
+        run(emit_output.getvalue(), stdout=run_output)
+        self.assertEquals("", run_output.getvalue())
