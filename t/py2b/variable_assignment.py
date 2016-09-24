@@ -32,3 +32,13 @@ class TestVariableAssignment(unittest.TestCase):
         builder = BFBuild(python, emit=emitter).emit_bf()
 
         run(emit_output.getvalue(), stdout=run_output)
+
+    def test_setting_integer(self):
+        emit_output = StringIO.StringIO()
+        run_output = StringIO.StringIO()
+        emitter = Emitter(stdout=emit_output)
+        python = """v1 = 57 """
+        builder = BFBuild(python, emit=emitter).emit_bf()
+
+        memory_space = []
+        run(emit_output.getvalue(), stdout=run_output)

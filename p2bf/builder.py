@@ -2,17 +2,18 @@ import re
 import ast
 from p2bf.emitter import Emitter
 from p2bf.variable_map import VariableMap
+import p2bf.constants as constants
 
 
 class BFBuild(object):
-    temp_vars = {}
-    free_temp_vars = []
-    byte_var_table = {}
-    current_var_index = 0
-    python = ""
-    if_depth = 0
 
     def __init__(self, python, verbose=False, emit=None):
+        self.temp_vars = {}
+        self.free_temp_vars = []
+        self.byte_var_table = {}
+        self.current_var_index = 0
+        self.if_depth = 0
+
         self.python = python
         self.vmap = VariableMap()
         if emit:
@@ -40,6 +41,23 @@ class BFBuild(object):
         if print_node.nl:
             self.emit_print_string("\n")
 
+    def process_number_assignment(self, target, value, value_node):
+        if value != int(value):
+            self.error_on_node(value_node,
+                               "Can only set integers right now")
+
+        if value > 127 or value < -127:
+            self.error_on_node(value_node,
+                               "Out of 8-bit (signed) range")
+
+        v_index = self.vmap.get_or_create_variable_index(target)
+
+        self.emit_move_to_var_index(v_index["type"])
+        self.emit_set_current_index_value(constants.TYPE_INT)
+        self.emit_move_to_var_index(v_index["data"])
+        self.emit_zero_current_index()
+        self.emit_set_current_index_value(value)
+
     def process_string_assignment(self, target, value, value_node):
         if len(value) > 1:
             self.error_on_node(value_node,
@@ -47,7 +65,9 @@ class BFBuild(object):
 
         v_index = self.vmap.get_or_create_variable_index(target)
 
-        self.emit_move_to_var_index(v_index)
+        self.emit_move_to_var_index(v_index["type"])
+        self.emit_set_current_index_value(constants.TYPE_STRING)
+        self.emit_move_to_var_index(v_index["data"])
         self.emit_zero_current_index()
         self.emit_set_current_index_value(ord(value))
 
@@ -58,8 +78,8 @@ class BFBuild(object):
         current_else_var = self.get_temp_target_var()
 
         self.if_depth += 1
-        if_index = self.vmap.get_variable_index(current_if_var)
-        else_index = self.vmap.get_variable_index(current_else_var)
+        if_index = self.vmap.get_variable_index(current_if_var)["data"]
+        else_index = self.vmap.get_variable_index(current_else_var)["data"]
 
         self.emit.debug("At if depth %s" % (self.if_depth-1))
         self.emit_move_to_var_index(if_index)
@@ -118,74 +138,101 @@ class BFBuild(object):
             self.error_on_node(node,
                                "Don't know how to do multiple comparisons")
         if isinstance(node.ops[0], ast.Eq):
+            def _indexes_equal(target_index, left_index, comp_index):
+                # If we subtract one from each temp var until the first one is
+                # empty, if the second temp var is empty then they're equal.
+
+                # We set the target to true initially, so it can fail in a
+                # loop on the second variable
+                self.emit_move_to_var_index(target_index)
+                self.emit_zero_current_index()
+                self.emit.add()
+
+                self.emit_move_to_var_index(left_index)
+                self.emit.start_loop("Emptying tmp left and comp variables")
+                self.emit.subtract()
+                self.emit_move_to_var_index(comp_index)
+                self.emit.subtract()
+                self.emit_move_to_var_index(left_index)
+                self.emit.end_loop()
+
+                self.emit_move_to_var_index(comp_index)
+                self.emit.start_loop("If there's a value here, the values "
+                                     "aren't equal!")
+                self.emit_zero_current_index()
+                self.emit_move_to_var_index(target_index)
+                self.emit_zero_current_index()
+                self.emit_move_to_var_index(comp_index)
+                self.emit.end_loop()
+
             left_var = self.get_temp_target_var()
             comp_var = self.get_temp_target_var()
             self._process_assignment_to_variable(left_var, node.left)
             self._process_assignment_to_variable(comp_var, node.comparators[0])
 
             target_index = self.vmap.get_variable_index(target)
+
+            self.emit_move_to_var_index(target_index["type"])
+            self.emit_set_current_index_value(constants.TYPE_INT)
+
             left_index = self.vmap.get_variable_index(left_var)
             comp_index = self.vmap.get_variable_index(comp_var)
-            # If we subtract one from each temp var until the first one is
-            # empty, if the second temp var is empty then they're equal.
 
-            # We set the target to true initially, so it can fail in a loop on
-            # the second variable
-            self.emit_move_to_var_index(target_index)
-            self.emit_zero_current_index()
-            self.emit.add()
+            _indexes_equal(target_index["data"],
+                           left_index["type"],
+                           comp_index["type"])
 
-            self.emit_move_to_var_index(left_index)
-            self.emit.start_loop("Emptying tmp left and comp variables")
-            self.emit.subtract()
-            self.emit_move_to_var_index(comp_index)
-            self.emit.subtract()
-            self.emit_move_to_var_index(left_index)
-            self.emit.end_loop()
+            _indexes_equal(target_index["data"],
+                           left_index["data"],
+                           comp_index["data"])
 
-            self.emit_move_to_var_index(comp_index)
-            self.emit.start_loop("If there's a value here, the values aren't "
-                                 "equal!")
-            self.emit_zero_current_index()
-            self.emit_move_to_var_index(target_index)
-            self.emit_zero_current_index()
-            self.emit_move_to_var_index(comp_index)
-            self.emit.end_loop()
             self.free_temp_target_var(left_var)
             self.free_temp_target_var(comp_var)
         elif isinstance(node.ops[0], ast.NotEq):
-            left_var = self.get_temp_target_var()
-            comp_var = self.get_temp_target_var()
-            self._process_assignment_to_variable(left_var, node.left)
-            self._process_assignment_to_variable(comp_var, node.comparators[0])
-
-            target_index = self.vmap.get_variable_index(target)
-            left_index = self.vmap.get_variable_index(left_var)
-            comp_index = self.vmap.get_variable_index(comp_var)
             # If we subtract one from each temp var until the first one is
             # empty, if the second temp var is empty then they're equal.
 
             # We set the target to false initially, so it can be true in a
             # loop on the second variable
-            self.emit_move_to_var_index(target_index)
+            def _indexes_ne(target_index, left_index, right_index):
+                self.emit_move_to_var_index(left_index)
+                self.emit.start_loop("Emptying tmp left and comp variables")
+                self.emit.subtract()
+                self.emit_move_to_var_index(right_index)
+                self.emit.subtract()
+                self.emit_move_to_var_index(left_index)
+                self.emit.end_loop()
+
+                self.emit_move_to_var_index(right_index)
+                self.emit.start_loop("If there's a value here, the values "
+                                     "aren't equal!")
+                self.emit_zero_current_index()
+                self.emit_move_to_var_index(target_index)
+                self.emit.add()
+                self.emit_move_to_var_index(right_index)
+                self.emit.end_loop()
+
+            left_var = self.get_temp_target_var()
+            comp_var = self.get_temp_target_var()
+            self._process_assignment_to_variable(left_var, node.left)
+            self._process_assignment_to_variable(comp_var, node.comparators[0])
+
+            target_index = self.vmap.get_variable_index(target)
+
+            self.emit_move_to_var_index(target_index["type"])
+            self.emit_set_current_index_value(constants.TYPE_INT)
+            self.emit_move_to_var_index(target_index["data"])
             self.emit_zero_current_index()
 
-            self.emit_move_to_var_index(left_index)
-            self.emit.start_loop("Emptying tmp left and comp variables")
-            self.emit.subtract()
-            self.emit_move_to_var_index(comp_index)
-            self.emit.subtract()
-            self.emit_move_to_var_index(left_index)
-            self.emit.end_loop()
+            left_index = self.vmap.get_variable_index(left_var)
+            comp_index = self.vmap.get_variable_index(comp_var)
 
-            self.emit_move_to_var_index(comp_index)
-            self.emit.start_loop("If there's a value here, the values aren't "
-                                 "equal!")
-            self.emit_zero_current_index()
-            self.emit_move_to_var_index(target_index)
-            self.emit.add()
-            self.emit_move_to_var_index(comp_index)
-            self.emit.end_loop()
+            _indexes_ne(target_index["data"],
+                        left_index["type"],
+                        comp_index["type"])
+            _indexes_ne(target_index["data"],
+                        left_index["data"],
+                        comp_index["data"])
             self.free_temp_target_var(left_var)
             self.free_temp_target_var(comp_var)
 
@@ -195,6 +242,8 @@ class BFBuild(object):
     def _process_assignment_to_variable(self, target, node):
             if isinstance(node, ast.Str):
                 self.process_string_assignment(target, node.s, node)
+            elif isinstance(node, ast.Num):
+                self.process_number_assignment(target, node.n, node)
             elif isinstance(node, ast.Name):
                 self.process_variable_to_variable(target, node.id, node)
             elif isinstance(node, ast.Compare):
@@ -206,7 +255,7 @@ class BFBuild(object):
                 self.free_temp_target_var(compare_target)
 
             else:
-                print ast.dump(assignment_node)
+                print ast.dump(node)
                 self.error_on_node(node, "Unable to set value type")
 
     def process_assignment_node(self, assignment_node):
@@ -219,10 +268,7 @@ class BFBuild(object):
 
             self._process_assignment_to_variable(target.id, value)
 
-    def process_variable_to_variable(self, target, source, source_node):
-        source_index = self.vmap.get_variable_index(source)
-        target_index = self.vmap.get_or_create_variable_index(target)
-
+    def _copy_value_to_index_from_index(self, target_index, source_index):
         self.emit.debug("Copying value from %s to %s" % (source_index,
                                                          target_index))
         # Clear out our scratch space.
@@ -257,9 +303,19 @@ class BFBuild(object):
         self.emit_move_to_var_index(self.get_scratch_index())
         self.emit.end_loop()
 
+    def process_variable_to_variable(self, target, source, source_node):
+        source_index = self.vmap.get_variable_index(source)
+        target_index = self.vmap.get_or_create_variable_index(target)
+
+        self._copy_value_to_index_from_index(target_index["type"],
+                                             source_index["type"])
+
+        self._copy_value_to_index_from_index(target_index["data"],
+                                             source_index["data"])
+
     def emit_print_variable(self, variable_name):
         v_index = self.vmap.get_variable_index(variable_name)
-        self.emit_move_to_var_index(v_index)
+        self.emit_move_to_var_index(v_index["data"])
         self.emit.print_current_index()
 
     def emit_print_string(self, value):
@@ -307,19 +363,27 @@ class BFBuild(object):
             self.error_on_node(node, "Syntax not supported yet :(")
 
     def get_scratch_index(self):
-        return self.vmap.get_variable_index("___scratch")
+        index = self.vmap.get_or_create_variable_index("___scratch", size=1)
+        return index["data"]
 
     def create_starting_variables(self):
         vmap = self.vmap
-        scratch_space_index = vmap.get_or_create_variable_index("___scratch")
-        true_index = vmap.get_or_create_variable_index("True")
-        false_index = vmap.get_or_create_variable_index("False")
+        self.get_scratch_index()
+        true_index = vmap.get_or_create_variable_index("True", size=1)
+        false_index = vmap.get_or_create_variable_index("False", size=1)
+
         self.emit.debug("Defining True at index %s" % true_index)
-        self.emit_move_to_var_index(true_index)
+
+        self.emit_move_to_var_index(true_index["type"])
+        self.emit_set_current_index_value(constants.TYPE_INT)
+        self.emit_move_to_var_index(true_index["data"])
         self.emit_zero_current_index()
         self.emit.add()
+
         self.emit.debug("Defining False at index %s" % false_index)
-        self.emit_move_to_var_index(false_index)
+        self.emit_move_to_var_index(true_index["type"])
+        self.emit_set_current_index_value(constants.TYPE_INT)
+        self.emit_move_to_var_index(false_index["data"])
         self.emit_zero_current_index()
 
     def emit_bf(self):
